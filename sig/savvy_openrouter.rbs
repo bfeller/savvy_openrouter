@@ -1,4 +1,150 @@
 module SavvyOpenrouter
   VERSION: String
-  # See the writing guide of rbs: https://github.com/ruby/rbs#guides
+
+  class Error < StandardError
+    attr_reader status_code: Integer?
+    attr_reader response_body: untyped
+    def initialize: (?String message, ?status_code: Integer?, ?response_body: untyped) -> void
+  end
+
+  class ConfigurationError < Error
+  end
+
+  class ApiError < Error
+  end
+
+  class BadRequestError < ApiError
+  end
+
+  class AuthenticationError < ApiError
+  end
+
+  class PaymentRequiredError < ApiError
+  end
+
+  class ForbiddenError < ApiError
+  end
+
+  class NotFoundError < ApiError
+  end
+
+  class RateLimitError < ApiError
+  end
+
+  class InternalServerError < ApiError
+  end
+
+  class BadGatewayError < ApiError
+  end
+
+  class TimeoutPollError < Error
+  end
+
+  class Configuration
+    attr_accessor api_key: String?
+    attr_accessor base_url: String
+    attr_accessor default_model: String?
+    attr_accessor http_referer: String?
+    attr_accessor app_title: String?
+    attr_reader defaults: Hash[String, untyped]
+    attr_reader video_defaults: Hash[String, untyped]
+    attr_reader responses_defaults: Hash[String, untyped]
+    attr_reader api_call_log: Hash[String, untyped]
+    attr_reader chat_retries: Hash[String, untyped]
+
+    def initialize: (?config_path: String?, **untyped options) -> void
+    def merge_chat_body: (Hash[Symbol | String, untyped] body) -> Hash[String, untyped]
+    def merge_video_body: (Hash[Symbol | String, untyped] body) -> Hash[String, untyped]
+    def merge_responses_body: (Hash[Symbol | String, untyped] body) -> Hash[String, untyped]
+    def self.load_file: (String path) -> Hash[String, untyped]
+    def self.discover_config_file: (?String cwd) -> String?
+  end
+
+  class ApiCallLogger
+    def initialize: (Hash[String, untyped] config) -> void
+    def enabled?: () -> bool
+    def max_body_limit: () -> Integer
+    def record: (Hash[String, untyped] attrs) -> untyped
+    def self.format_body_for_log: (untyped obj, ?max_bytes: Integer) -> String
+  end
+
+  class CompletionRetryPolicy
+    def initialize: (Hash[String, untyped] | false? raw) -> void
+    def max_attempts: () -> Integer
+    def enabled?: () -> bool
+    def retry_http_error?: (ApiError error) -> bool
+    def retry_response?: (Hash[Symbol | String, untyped] response) -> bool
+    def wait_after_attempt: (Integer attempt_number) -> void
+  end
+
+  class Connection
+    DEFAULT_SUCCESS: Array[Integer]
+
+    attr_reader config: Configuration
+
+    def initialize: (Configuration config) -> void
+    def get: (String path, ?params: Hash[Symbol | String, untyped]?, ?success: Array[Integer]?) -> untyped
+    def delete: (String path, ?params: Hash[Symbol | String, untyped]?, ?success: Array[Integer]?) -> untyped
+    def post: (String path, body: Hash[Symbol | String, untyped], ?success: Array[Integer]?) -> untyped
+    def patch: (String path, body: Hash[Symbol | String, untyped], ?success: Array[Integer]?) -> untyped
+    def put: (String path, body: Hash[Symbol | String, untyped], ?success: Array[Integer]?) -> untyped
+    def get_raw: (String path, ?params: Hash[Symbol | String, untyped]?, ?success: Array[Integer]?) -> String
+    def post_raw: (String path, body: Hash[Symbol | String, untyped], ?success: Array[Integer]?) -> String
+    def stream_get: (String path, ?params: Hash[Symbol | String, untyped]?) { (String chunk) -> void } -> void
+    def stream_post: (String path, Hash[Symbol | String, untyped] body) { (String chunk) -> void } -> void
+  end
+
+  class Client
+    attr_reader config: Configuration
+    attr_reader connection: Connection
+
+    def initialize: (?config_path: String?, **untyped options) -> void
+
+    def chat: -> Resources::Chat
+    def responses: -> Resources::Responses
+    def anthropic_messages: -> Resources::AnthropicMessages
+    def embeddings: -> Resources::Embeddings
+    def rerank: -> Resources::Rerank
+    def models: -> Resources::Models
+    def credits: -> Resources::Credits
+    def providers: -> Resources::Providers
+    def generations: -> Resources::Generations
+    def endpoints: -> Resources::Endpoints
+    def analytics: -> Resources::Analytics
+    def audio: -> Resources::Audio
+    def videos: -> Resources::Videos
+    def oauth: -> Resources::OAuth
+    def api_keys: -> Resources::ApiKeys
+    def organization: -> Resources::Organization
+    def guardrails: -> Resources::Guardrails
+    def workspaces: -> Resources::Workspaces
+  end
+
+  module Resources
+    class Chat
+      def completions: (messages: untyped, **untyped params) -> untyped
+      def completions_stream: (messages: untyped, **untyped params) ?{ (String sse_data_line) -> void } -> (Enumerator[String] | void)
+    end
+
+    class Models
+      def list: (**untyped params) -> untyped
+      def count: () -> untyped
+      def user: () -> untyped
+      def endpoints: (author: String, slug: String) -> untyped
+      def first_ranked_free_text_model: (category: String, ?output_modalities: String) -> Hash[Symbol, untyped]?
+    end
+
+    class Videos
+      def create: (**untyped params) -> untyped
+      def get: (String job_id) -> untyped
+      def download: (String job_id, ?index: Integer) -> String
+      def stream: (String job_id, ?index: Integer) { (String chunk) -> void } -> void
+      def poll_until: (String job_id, ?interval: Numeric, ?timeout: Numeric) -> untyped
+      def models: () -> untyped
+    end
+  end
+
+  module Streaming
+    def self.each_sse_data: (Enumerator[String] chunk_enum) { (String payload) -> void } -> void
+  end
 end

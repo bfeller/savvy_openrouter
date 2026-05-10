@@ -1,0 +1,53 @@
+# OpenRouter defaults — loaded automatically when present at config/savvy_openrouter.yml
+# or .savvy_openrouter.yml (see SavvyOpenrouter::Configuration).
+#
+# Precedence: keyword arguments to SavvyOpenrouter::Client > this file > ENV variables.
+
+# api_key: "sk-or-v1-..."
+# base_url: "https://openrouter.ai/api/v1"
+
+# Default model merged into chat/embeddings/rerank/audio bodies when `model` is omitted:
+# default_model: "openai/gpt-4o-mini"
+
+# Optional app attribution headers (https://openrouter.ai/docs/app-attribution.mdx):
+# http_referer: "https://your-app.example.com"
+# app_title: "Your App Name"
+
+# Keys merged into POST /chat/completions (and similar) bodies:
+# defaults:
+#   temperature: 0.7
+#   max_tokens: 4096
+
+# Keys merged into POST /videos bodies when creating video jobs:
+# video_defaults:
+#   aspect_ratio: "16:9"
+#   resolution: "720p"
+#   duration: 8
+
+# Keys merged only into POST /responses (Responses API beta) — not chat/embeddings:
+# responses_defaults:
+#   plugins:
+#     - id: web
+#       max_results: 5
+#   max_output_tokens: 9000
+#
+# Optional: persist HTTP exchanges for debugging (Rails: migration + model with create!)
+# api_call_log:
+#   model: OpenRouterApiCallLog
+#   max_body_bytes: 65536
+#   columns:
+#     method: http_method
+#     path: request_url
+#     status: response_status
+#     duration_ms: duration_ms
+#     request_body: request_body
+#     response_body: response_body
+#     error_class: error_class
+#     error_message: error_message
+#     streaming: streaming
+#
+# Optional: retry chat/completions (non-streaming) on empty output, zero completion tokens, or transient HTTP errors
+# chat_retries:
+#   max_attempts: 4
+#   base_delay_ms: 400
+#   max_delay_ms: 8000

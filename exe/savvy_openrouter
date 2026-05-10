@@ -1,0 +1,32 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "fileutils"
+
+gem_root = File.expand_path("..", __dir__)
+template = File.join(gem_root, "lib/generators/savvy_openrouter/install/templates/savvy_openrouter.yml")
+
+unless File.file?(template)
+  warn "Template missing: #{template}"
+  exit 1
+end
+
+case ARGV[0]
+when "install"
+  dest_dir = File.join(Dir.pwd, "config")
+  dest = File.join(dest_dir, "savvy_openrouter.yml")
+  FileUtils.mkdir_p(dest_dir)
+  if File.file?(dest)
+    warn "Already exists: #{dest}"
+    exit 1
+  end
+  FileUtils.cp(template, dest)
+  puts "Created #{dest}"
+when nil, "-h", "--help"
+  puts "Usage: savvy_openrouter install"
+  exit(ARGV[0] ? 0 : 1)
+else
+  warn "Unknown command: #{ARGV[0].inspect}"
+  warn "Usage: savvy_openrouter install"
+  exit 1
+end
