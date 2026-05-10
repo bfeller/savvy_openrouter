@@ -9,8 +9,12 @@ Gem::Specification.new do |spec|
   spec.email = ["brizzlefeller@gmail.com"]
 
   spec.summary = "Ruby client for the OpenRouter unified AI API."
-  spec.description = "OpenRouter Ruby client: streaming chat, embeddings, audio, video, OAuth, API keys, guardrails, workspaces."
-  spec.homepage = "https://github.com/brizzlefeller/savvy_openrouter"
+  spec.description = [
+    "OpenRouter Ruby client: chat (streaming SSE), configurable retries for non-streaming completions,",
+    "optional DB-backed API call logging, Responses API defaults, models listing with filters and free-tier hints,",
+    "embeddings, rerank, audio, video, OAuth, API keys, guardrails, workspaces, and related REST endpoints."
+  ].join(" ")
+  spec.homepage = "https://github.com/bfeller/savvy_openrouter"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1.0"
 

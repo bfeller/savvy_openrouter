@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-09
+
 ### Added
 
 - **`Chat`:** configurable **`chat_retries`** / **`completion_retries`** for **`client.chat.completions`** — retries on empty assistant text, **`usage.completion_tokens == 0`**, and HTTP **429** / **502** / **500**/**501** / **503** with backoff (streaming unchanged).
