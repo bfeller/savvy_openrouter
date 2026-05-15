@@ -54,6 +54,37 @@ RSpec.describe SavvyOpenrouter::ApiCallLogger do
         "payload" => '{"error":{}}'
       )
     end
+
+    it "maps whitelisted passthrough keys from attrs to columns" do
+      rows = []
+      klass = Class.new do
+        define_singleton_method(:create!) { |attrs| rows << attrs }
+      end
+      stub_const("SavvyOpenrouter::SpecApiCallLog2", klass)
+
+      log = described_class.new(
+        "model" => "SavvyOpenrouter::SpecApiCallLog2",
+        "columns" => {
+          "endpoint" => "ep",
+          "bill_forward_event_id" => "bfe_id",
+          "cost" => "cost_usd",
+          "usage" => "usage_json"
+        }
+      )
+
+      log.record(
+        "endpoint" => "chat_completions",
+        "bill_forward_event_id" => 42,
+        "cost" => BigDecimal("0.01"),
+        "usage" => { "completion_tokens" => 1 }
+      )
+
+      expect(rows.size).to eq(1)
+      expect(rows.first["ep"]).to eq("chat_completions")
+      expect(rows.first["bfe_id"]).to eq(42)
+      expect(rows.first["cost_usd"]).to eq(BigDecimal("0.01"))
+      expect(rows.first["usage_json"]).to include("completion_tokens")
+    end
   end
 
   describe ".format_body_for_log" do

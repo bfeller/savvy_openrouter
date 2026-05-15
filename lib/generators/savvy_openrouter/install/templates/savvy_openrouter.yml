@@ -1,6 +1,12 @@
 # OpenRouter defaults — loaded automatically when present at config/savvy_openrouter.yml
 # or .savvy_openrouter.yml (see SavvyOpenrouter::Configuration).
 #
+# PDF file-parser engine when messages include PDFs (openrouter file-parser plugin):
+# file_parser_pdf_engine: native          # model-native when supported (e.g. Gemini)
+# file_parser_pdf_engine: cloudflare-ai  # free conversion to markdown (gem default if unset)
+# file_parser_pdf_engine: mistral-ocr    # paid; scans / complex PDFs
+# Or: ENV OPENROUTER_FILE_PARSER_PDF_ENGINE
+#
 # Precedence: keyword arguments to SavvyOpenrouter::Client > this file > ENV variables.
 
 # api_key: "sk-or-v1-..."
@@ -35,16 +41,41 @@
 # api_call_log:
 #   model: OpenRouterApiCallLog
 #   max_body_bytes: 65536
+#   # With chat_retries: "final" logs only the last attempt; "all" logs each HTTP try.
+#   chat_attempts: final
+#   # With responses_retries loops: "final" logs only the last POST /responses attempt.
+#   responses_attempts: final
 #   columns:
 #     method: http_method
 #     path: request_url
 #     status: response_status
+#     http_status: http_status
+#     success: success
 #     duration_ms: duration_ms
 #     request_body: request_body
 #     response_body: response_body
+#     request_json: request_json
+#     response_json: response_json
+#     usage: usage
+#     cost: cost
+#     generation_id: generation_id
+#     logical_model: logical_model
+#     endpoint: endpoint
 #     error_class: error_class
 #     error_message: error_message
 #     streaming: streaming
+#
+# Optional: retry POST /responses on zero output_tokens or transient HTTP errors
+# responses_retries:
+#   max_attempts: 3
+#   base_delay_ms: 400
+#   max_delay_ms: 8000
+#   on:
+#     zero_output_tokens: true
+#     rate_limit: true
+#     bad_gateway: true
+#     internal_server_error: true
+#     service_unavailable: true
 #
 # Optional: retry chat/completions (non-streaming) on empty output, zero completion tokens, or transient HTTP errors
 # chat_retries:

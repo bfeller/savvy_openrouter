@@ -60,26 +60,52 @@ app_title: "Your App"
 
 Optional persistence of **every outbound OpenRouter HTTP request** made through this gem (JSON clients, raw/binary downloads, and streaming chat). Configure **`api_call_log`** in YAML or pass **`api_call_log:`** when building **`SavvyOpenrouter::Client`**.
 
-It depends on **Active Record** (or any Ruby class you configure) exposing **`create!(attributes)`** — the usual Rails pattern. Define a migration for whatever columns you map (strings / integers / booleans / text); avoid indexing huge raw payloads on Postgres without care.
+It depends on **Active Record** (or any Ruby class you configure) exposing **`create!(attributes)`** — the usual Rails pattern. Define a migration for whatever columns you map (strings / integers / booleans / text / jsonb); avoid indexing huge raw payloads on Postgres without care.
+
+Each entry under **`columns`** is **`<source_key>: <your_column>`**. If the logged payload includes **`source_key`**, it is copied into the row (after coercion). Reserved keys (**`model`**, **`columns`**, **`max_body_bytes`**, **`chat_attempts`**, **`responses_attempts`**) are never read from logged attrs. Any other **`source_key`** you whitelist can carry **app-specific** context (for example `bill_forward_event_id`), provided your code merges it via **`connection.with_call_context`**.
 
 ```yaml
-# Optional — persist each outbound HTTP exchange for debugging (Faraday JSON + raw + SSE streams)
 api_call_log:
   model: OpenRouterApiCallLog
   max_body_bytes: 65536
+  # With chat_retries, log only the final HTTP attempt (one row per logical completion).
+  # Use "all" (or omit) to persist every retry attempt.
+  chat_attempts: final
   columns:
-    method: http_method          # GET, POST, …
-    path: request_url            # full URL including query string when present
-    status: response_status      # integer HTTP status (nil on transport failure before response)
-    duration_ms: duration_ms     # float milliseconds
-    request_body: request_body   # JSON-ish text; secrets redacted; truncated to max_body_bytes
-    response_body: response_body # same treatment
-    error_class: error_class     # nil when Faraday returned a response
-    error_message: error_message # transport errors or truncated exception message
-    streaming: streaming         # true for chat SSE streams
+    method: http_method
+    path: request_url
+    status: response_status           # same as http_status when Faraday returned a response
+    http_status: http_status
+    success: success                  # boolean: 2xx HTTP
+    duration_ms: duration_ms
+    request_body: request_body
+    response_body: response_body
+    request_json: request_json        # structured body; coercion JSON-serializes for json/text columns
+    response_json: response_json
+    usage: usage                      # usage hash from JSON responses when present
+    cost: cost                        # BigDecimal parsed from usage when present
+    generation_id: generation_id    # from x-generation-id header or response id
+    logical_model: logical_model    # model string from request body when present
+    endpoint: endpoint              # resource endpoint label when set via call context
+    error_class: error_class
+    error_message: error_message
+    streaming: streaming
+    bill_forward_event_id: bill_forward_event_id   # example passthrough key
 ```
 
-Canonical keys on the **left** (`method`, `path`, …) are fixed by the gem; **right-hand** names are your database columns. Omit mappings you do not need. Set **`api_call_log: false`** (or omit `model` / `columns`) to disable.
+**Call context:** wrap outbound calls to attach keys merged into every log row for that scope:
+
+```ruby
+client.connection.with_call_context(bill_forward_event_id: event.id) do
+  client.chat.completions(...)
+end
+```
+
+Set **`suppress_api_call_log: true`** in the context hash to skip persistence for that block (for example when the app performs its own higher-level logging / retries).
+
+**Logical failures after HTTP 200** (invalid structured JSON, validation): use **`client.record_api_call(attrs)`** (delegates to **`connection.record_manual_api_call`**). Attributes are merged with the current **`with_call_context`** stack.
+
+Canonical source keys the gem may set include: **`method`**, **`path`**, **`status`**, **`http_status`**, **`duration_ms`**, **`request_body`**, **`response_body`**, **`request_json`**, **`response_json`**, **`usage`**, **`cost`**, **`generation_id`**, **`logical_model`**, **`endpoint`**, **`success`**, **`error_class`**, **`error_message`** (for failed JSON HTTP responses, from the API **`error.message`** when present), **`streaming`**, plus any keys you pass through **`with_call_context`**. Omit mappings you do not need. Set **`api_call_log: false`** (or omit **`model`** / **`columns`**) to disable.
 
 Logging failures never raise into your app code. Large bodies are truncated; **`Authorization`** / **`sk-or-v1-*`** patterns in serialized bodies are redacted (still treat logs as sensitive).
 
@@ -106,6 +132,43 @@ chat_retries:
 ```
 
 After the last attempt, the gem returns the **final response body** (for 200s) or **re-raises** the last API error. **`completions_stream`** does not use this policy—handle streaming retries in your own code if needed.
+
+### Responses API retries (`responses_retries`)
+
+For **`client.responses.create`** only, configure **`responses_retries`** in YAML or pass **`responses_retries:`** to **`SavvyOpenrouter::Client`**. Same timing options as **`chat_retries`** (`max_attempts`, `base_delay_ms`, …). When **`on.zero_output_tokens`** is true (default), the gem retries on **successful HTTP 200** responses where **`usage.output_tokens`** is zero and **`status`** indicates an incomplete or empty generation (see `ResponsesRetryPolicy`).
+
+With **`api_call_log`**, set **`responses_attempts: final`** to persist **one** row for the last HTTP attempt of a retry loop; **`all`** logs each attempt (default).
+
+### Structured output validation (`savvy_openrouter/patterns`)
+
+Optional pure-Ruby checks that assistant / Responses text is non-empty **parseable JSON** when the request asked for **`json_object`** or **`json_schema`**:
+
+```ruby
+require "savvy_openrouter/patterns"
+
+SavvyOpenrouter::Patterns.validate_after_success!(
+  endpoint: "chat_completions",
+  request: request_body_hash,
+  response: parsed_response_hash
+)
+# raises SavvyOpenrouter::StructuredOutputError (reason: :empty_content, :invalid_json, :no_choices)
+```
+
+Helpers: **`chat_structured_requested?`**, **`responses_structured_requested?`**, **`extract_chat_assistant_text`**, **`extract_responses_output_text`**, **`assert_parseable_json!`**.
+
+### Request plugins (`savvy_openrouter/request_plugins`)
+
+Optional injection of OpenRouter plugins before **`chat.completions`** / **`responses.create`**:
+
+```ruby
+require "savvy_openrouter/request_plugins"
+
+SavvyOpenrouter::RequestPlugins.prepare_chat_body!(body) # PDF engine from config / default cloudflare-ai
+SavvyOpenrouter::RequestPlugins.prepare_chat_body!(body, pdf_engine: "native") # e.g. Gemini native PDF
+SavvyOpenrouter::RequestPlugins.prepare_responses_body!(body) # response-healing for structured Responses
+```
+
+YAML (or `OPENROUTER_FILE_PARSER_PDF_ENGINE`): **`file_parser_pdf_engine`** — `native`, `cloudflare-ai`, `mistral-ocr`, etc. Apps using **`OpenRouterService`** pass this through from the loaded **`SavvyOpenrouter::Client`** config automatically.
 
 ### Install templates
 

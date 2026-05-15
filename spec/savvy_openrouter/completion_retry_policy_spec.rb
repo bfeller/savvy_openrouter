@@ -16,6 +16,21 @@ RSpec.describe SavvyOpenrouter::CompletionRetryPolicy do
       expect(p.retry_response?(res)).to be true
     end
 
+    it "retries when completion_tokens is zero and finish_reason is error" do
+      p = described_class.new("max_attempts" => 3)
+      res = {
+        choices: [{ finish_reason: "error", message: { content: "" } }],
+        usage: { completion_tokens: 0 }
+      }
+      expect(p.retry_response?(res)).to be true
+    end
+
+    it "retries empty assistant content when completion_tokens is positive" do
+      p = described_class.new("max_attempts" => 3)
+      res = { choices: [{ message: { content: "" } }], usage: { completion_tokens: 1 } }
+      expect(p.retry_response?(res)).to be true
+    end
+
     it "still retries for zero completion_tokens when tool_calls present (tokens may be misreported)" do
       p = described_class.new("max_attempts" => 3)
       res = {

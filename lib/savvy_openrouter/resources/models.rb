@@ -8,7 +8,9 @@ module SavvyOpenrouter
       # Query params match OpenRouter GET /models (e.g. category, output_modalities, supported_parameters).
       def list(**params)
         query = stringify_query(params)
-        conn.get("/models", params: query.empty? ? nil : query)
+        conn.with_call_context(endpoint: "models", logical_model: nil) do
+          conn.get("/models", params: query.empty? ? nil : query)
+        end
       end
 
       # Uses GET /models with filters, then returns the first model whose prompt + completion pricing are zero.
@@ -21,15 +23,21 @@ module SavvyOpenrouter
       end
 
       def count
-        conn.get("/models/count")
+        conn.with_call_context(endpoint: "models_count", logical_model: nil) do
+          conn.get("/models/count")
+        end
       end
 
       def user
-        conn.get("/models/user")
+        conn.with_call_context(endpoint: "models_user", logical_model: nil) do
+          conn.get("/models/user")
+        end
       end
 
       def endpoints(author:, slug:)
-        conn.get("/models/#{author}/#{slug}/endpoints")
+        conn.with_call_context(endpoint: "models_endpoints", logical_model: nil) do
+          conn.get("/models/#{author}/#{slug}/endpoints")
+        end
       end
 
       private

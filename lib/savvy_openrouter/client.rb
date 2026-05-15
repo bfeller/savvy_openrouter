@@ -25,6 +25,16 @@ module SavvyOpenrouter
   class Client
     attr_reader :config, :connection
 
+    # Optional DB-backed request logging; see README (+api_call_log+).
+    def api_call_logger
+      connection.api_call_logger
+    end
+
+    # Merge active +with_call_context+ stack attrs and persist one row (e.g. structured-output failure after HTTP 200).
+    def record_api_call(attrs)
+      connection.record_manual_api_call(attrs)
+    end
+
     def initialize(config_path: nil, **options)
       @config = Configuration.new(config_path: config_path, **options)
       @connection = Connection.new(@config)

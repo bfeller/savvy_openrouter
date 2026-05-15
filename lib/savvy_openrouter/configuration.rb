@@ -5,7 +5,8 @@ require "yaml"
 module SavvyOpenrouter
   class Configuration
     attr_accessor :api_key, :base_url, :default_model, :http_referer, :app_title
-    attr_reader :defaults, :video_defaults, :responses_defaults, :api_call_log, :chat_retries
+    attr_reader :defaults, :video_defaults, :responses_defaults, :api_call_log, :chat_retries, :responses_retries,
+                :file_parser_pdf_engine
 
     alias llm_model default_model
     alias llm_model= default_model=
@@ -30,6 +31,8 @@ module SavvyOpenrouter
       @responses_defaults = {}
       @api_call_log = {}
       @chat_retries = {}
+      @responses_retries = {}
+      @file_parser_pdf_engine = nil
       load_from_env!
       yaml_path = config_path || self.class.discover_config_file
       merge_hash!(self.class.load_file(yaml_path)) if yaml_path
@@ -44,6 +47,7 @@ module SavvyOpenrouter
       nil
     end
 
+    # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity -- single YAML merge entry point
     def merge_hash!(hash)
       return unless hash.is_a?(Hash)
 
@@ -61,7 +65,10 @@ module SavvyOpenrouter
       assign_api_call_log(hash["api_call_log"]) if hash.key?("api_call_log")
       assign_chat_retries(hash["chat_retries"]) if hash.key?("chat_retries")
       assign_chat_retries(hash["completion_retries"]) if hash.key?("completion_retries")
+      assign_responses_retries(hash["responses_retries"]) if hash.key?("responses_retries")
+      assign_file_parser_pdf_engine(hash["file_parser_pdf_engine"]) if hash.key?("file_parser_pdf_engine")
     end
+    # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
     def merge_chat_body(body)
       body = stringify_keys(body)
@@ -94,6 +101,8 @@ module SavvyOpenrouter
       @default_model = ENV.fetch("OPENROUTER_DEFAULT_MODEL", nil)
       @http_referer = ENV.fetch("OPENROUTER_HTTP_REFERER", nil)
       @app_title = ENV.fetch("OPENROUTER_APP_TITLE", nil)
+      env_pdf = ENV.fetch("OPENROUTER_FILE_PARSER_PDF_ENGINE", nil)
+      @file_parser_pdf_engine = env_pdf.strip if env_pdf && !env_pdf.strip.empty?
     end
 
     def apply_options!(options)
@@ -117,6 +126,8 @@ module SavvyOpenrouter
       elsif opts.key?(:completion_retries)
         assign_chat_retries(opts.delete(:completion_retries))
       end
+      assign_responses_retries(opts.delete(:responses_retries)) if opts.key?(:responses_retries)
+      assign_file_parser_pdf_engine(opts.delete(:file_parser_pdf_engine)) if opts.key?(:file_parser_pdf_engine)
 
       return if opts.empty?
 
@@ -151,6 +162,29 @@ module SavvyOpenrouter
       else
         raise ArgumentError, "chat_retries must be a Hash or false"
       end
+    end
+
+    def assign_responses_retries(value)
+      case value
+      when false, nil
+        @responses_retries = {}
+      when Hash
+        h = self.class.stringify_keys_static(value)
+        h["on"] = self.class.stringify_keys_static(h["on"]) if h["on"].is_a?(Hash)
+        @responses_retries = h
+      else
+        raise ArgumentError, "responses_retries must be a Hash or false"
+      end
+    end
+
+    def assign_file_parser_pdf_engine(value)
+      @file_parser_pdf_engine =
+        if value.nil?
+          nil
+        else
+          s = value.to_s.strip
+          s.empty? ? nil : s
+        end
     end
   end
 end

@@ -11,6 +11,14 @@ module SavvyOpenrouter
 
       attr_reader :client
 
+      def logical_model_from_body(body)
+        return nil unless body.is_a?(Hash)
+
+        m = body[:model] || body["model"]
+        s = m.to_s.strip
+        s.empty? ? nil : s
+      end
+
       def conn
         client.connection
       end

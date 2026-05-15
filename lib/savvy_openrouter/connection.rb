@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require_relative "connection_instrumentation"
+require_relative "connection_api_call_recording"
+require_relative "connection_api_call_recording_transport"
 
 require "faraday"
 require "json"
@@ -10,14 +12,19 @@ require "uri"
 module SavvyOpenrouter
   class Connection
     include Instrumentation
+    include ApiCallRecording
+    include ApiCallRecordingTransport
 
     DEFAULT_SUCCESS = [200, 201, 202, 204].freeze
 
-    attr_reader :config
+    attr_reader :config, :api_call_logger
 
     def initialize(config)
       @config = config
       @api_call_logger = ApiCallLogger.new(config.api_call_log)
+      @call_context_stack = []
+      @pending_deferred_chat_log = nil
+      @pending_deferred_responses_log = nil
       base = normalize_base(config.base_url)
       headers = build_headers
       @conn = Faraday.new(url: base, headers: headers) do |faraday|
@@ -152,6 +159,38 @@ module SavvyOpenrouter
         error: e
       )
       raise
+    end
+
+    def with_call_context(context = {})
+      parent = @call_context_stack.last || {}
+      merged = parent.merge(stringify_body(context.is_a?(Hash) ? context : {}))
+      @call_context_stack.push(merged)
+      yield
+    ensure
+      @call_context_stack.pop
+    end
+
+    # Record a logical failure after HTTP success (e.g. invalid structured JSON). Merges +context+ with +attrs+.
+    def record_manual_api_call(attrs)
+      ctx = stringify_body(@call_context_stack.last || {})
+      merged = ctx.merge(Configuration.stringify_keys_static(attrs))
+      @api_call_logger.record(merged)
+    end
+
+    def flush_deferred_chat_log!
+      attrs = @pending_deferred_chat_log
+      @pending_deferred_chat_log = nil
+      return if attrs.nil?
+
+      @api_call_logger.record(attrs)
+    end
+
+    def flush_deferred_responses_log!
+      attrs = @pending_deferred_responses_log
+      @pending_deferred_responses_log = nil
+      return if attrs.nil?
+
+      @api_call_logger.record(attrs)
     end
 
     def stream_post(path, body, &)

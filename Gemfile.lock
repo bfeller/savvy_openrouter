@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    savvy_openrouter (0.2.0)
+    savvy_openrouter (0.4.1)
       faraday (>= 2.0, < 4)
 
 GEM

@@ -134,5 +134,106 @@ RSpec.describe SavvyOpenrouter::Resources::Chat do
       expect(res[:choices].first[:message][:content]).to eq("ok")
       expect(WebMock).to have_requested(:post, "https://openrouter.ai/api/v1/chat/completions").twice
     end
+
+    it "with api_call_log chat_attempts final persists one row for two HTTP retries" do
+      rows = []
+      klass = Class.new do
+        define_singleton_method(:create!) { |attrs| rows << attrs }
+      end
+      stub_const("SavvyOpenrouter::SpecChatLogFinal", klass)
+
+      stub_request(:post, "https://openrouter.ai/api/v1/chat/completions")
+        .to_return(
+          {
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              choices: [{ message: { role: "assistant", content: "" } }],
+              usage: { completion_tokens: 0, prompt_tokens: 1, total_tokens: 1 }
+            }.to_json
+          },
+          {
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              choices: [{ message: { role: "assistant", content: "hi" } }],
+              usage: { completion_tokens: 1, prompt_tokens: 1, total_tokens: 2, cost: 0.001 }
+            }.to_json
+          }
+        )
+
+      client = SavvyOpenrouter::Client.new(
+        api_key: "sk-test",
+        chat_retries: {
+          max_attempts: 3,
+          base_delay_ms: 0,
+          jitter_ratio: 0,
+          exponential_backoff: false
+        },
+        api_call_log: {
+          model: "SavvyOpenrouter::SpecChatLogFinal",
+          chat_attempts: "final",
+          columns: {
+            "path" => "url",
+            "endpoint" => "ep",
+            "cost" => "cost_usd"
+          }
+        }
+      )
+      res = client.chat.completions(messages: [{ role: "user", content: "hello" }], model: "openai/gpt-4o-mini")
+      expect(res[:choices].first[:message][:content]).to eq("hi")
+      expect(WebMock).to have_requested(:post, "https://openrouter.ai/api/v1/chat/completions").twice
+      expect(rows.size).to eq(1)
+      expect(rows.first["ep"]).to eq("chat_completions")
+      expect(rows.first["cost_usd"]).to eq(BigDecimal("0.001"))
+    end
+
+    it "with api_call_log chat_attempts all persists one row per HTTP attempt" do
+      rows = []
+      klass = Class.new do
+        define_singleton_method(:create!) { |attrs| rows << attrs }
+      end
+      stub_const("SavvyOpenrouter::SpecChatLogAll", klass)
+
+      stub_request(:post, "https://openrouter.ai/api/v1/chat/completions")
+        .to_return(
+          {
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              choices: [{ message: { role: "assistant", content: "" } }],
+              usage: { completion_tokens: 0, prompt_tokens: 1, total_tokens: 1 }
+            }.to_json
+          },
+          {
+            status: 200,
+            headers: { "Content-Type" => "application/json" },
+            body: {
+              choices: [{ message: { role: "assistant", content: "hi" } }],
+              usage: { completion_tokens: 1, prompt_tokens: 1, total_tokens: 2 }
+            }.to_json
+          }
+        )
+
+      client = SavvyOpenrouter::Client.new(
+        api_key: "sk-test",
+        chat_retries: {
+          max_attempts: 3,
+          base_delay_ms: 0,
+          jitter_ratio: 0,
+          exponential_backoff: false
+        },
+        api_call_log: {
+          model: "SavvyOpenrouter::SpecChatLogAll",
+          chat_attempts: "all",
+          columns: {
+            "path" => "url",
+            "endpoint" => "ep"
+          }
+        }
+      )
+      client.chat.completions(messages: [{ role: "user", content: "hello" }])
+      expect(rows.size).to eq(2)
+    end
   end
 end

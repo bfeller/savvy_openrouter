@@ -77,4 +77,28 @@ RSpec.describe SavvyOpenrouter::Configuration do
     cfg = described_class.new(api_key: "k", chat_retries: false)
     expect(cfg.chat_retries).to eq({})
   end
+
+  it "loads responses_retries from kwargs" do
+    cfg = described_class.new(
+      api_key: "k",
+      responses_retries: { max_attempts: 3, on: { zero_output_tokens: false } }
+    )
+    expect(cfg.responses_retries["max_attempts"]).to eq(3)
+    expect(cfg.responses_retries["on"]["zero_output_tokens"]).to be false
+  end
+
+  it "clears responses_retries when false" do
+    cfg = described_class.new(api_key: "k", responses_retries: false)
+    expect(cfg.responses_retries).to eq({})
+  end
+
+  it "loads file_parser_pdf_engine from kwargs" do
+    cfg = described_class.new(api_key: "k", file_parser_pdf_engine: "native")
+    expect(cfg.file_parser_pdf_engine).to eq("native")
+  end
+
+  it "normalizes blank file_parser_pdf_engine to nil" do
+    cfg = described_class.new(api_key: "k", file_parser_pdf_engine: "  ")
+    expect(cfg.file_parser_pdf_engine).to be_nil
+  end
 end

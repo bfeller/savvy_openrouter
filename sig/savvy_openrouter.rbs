@@ -40,6 +40,21 @@ module SavvyOpenrouter
   class TimeoutPollError < Error
   end
 
+  class StructuredOutputError < StandardError
+    attr_reader reason: Symbol
+    attr_reader response_body: untyped
+    def initialize: (String message, reason: Symbol, ?response_body: untyped) -> void
+  end
+
+  class ResponsesRetryPolicy
+    def initialize: (Hash[String, untyped] | false? raw) -> void
+    def max_attempts: () -> Integer
+    def enabled?: () -> bool
+    def retry_http_error?: (ApiError error) -> bool
+    def retry_response?: (Hash[Symbol | String, untyped] response) -> bool
+    def wait_after_attempt: (Integer attempt_number) -> void
+  end
+
   class Configuration
     attr_accessor api_key: String?
     attr_accessor base_url: String
@@ -51,6 +66,8 @@ module SavvyOpenrouter
     attr_reader responses_defaults: Hash[String, untyped]
     attr_reader api_call_log: Hash[String, untyped]
     attr_reader chat_retries: Hash[String, untyped]
+    attr_reader responses_retries: Hash[String, untyped]
+    attr_reader file_parser_pdf_engine: String?
 
     def initialize: (?config_path: String?, **untyped options) -> void
     def merge_chat_body: (Hash[Symbol | String, untyped] body) -> Hash[String, untyped]
@@ -64,6 +81,8 @@ module SavvyOpenrouter
     def initialize: (Hash[String, untyped] config) -> void
     def enabled?: () -> bool
     def max_body_limit: () -> Integer
+    def chat_attempts_final?: () -> bool
+    def responses_attempts_final?: () -> bool
     def record: (Hash[String, untyped] attrs) -> untyped
     def self.format_body_for_log: (untyped obj, ?max_bytes: Integer) -> String
   end
@@ -81,8 +100,13 @@ module SavvyOpenrouter
     DEFAULT_SUCCESS: Array[Integer]
 
     attr_reader config: Configuration
+    attr_reader api_call_logger: ApiCallLogger
 
     def initialize: (Configuration config) -> void
+    def with_call_context: (?Hash[Symbol | String, untyped] context) { () -> untyped } -> untyped
+    def record_manual_api_call: (Hash[Symbol | String, untyped] attrs) -> untyped
+    def flush_deferred_chat_log!: () -> void
+    def flush_deferred_responses_log!: () -> void
     def get: (String path, ?params: Hash[Symbol | String, untyped]?, ?success: Array[Integer]?) -> untyped
     def delete: (String path, ?params: Hash[Symbol | String, untyped]?, ?success: Array[Integer]?) -> untyped
     def post: (String path, body: Hash[Symbol | String, untyped], ?success: Array[Integer]?) -> untyped
@@ -99,6 +123,9 @@ module SavvyOpenrouter
     attr_reader connection: Connection
 
     def initialize: (?config_path: String?, **untyped options) -> void
+
+    def api_call_logger: () -> ApiCallLogger
+    def record_api_call: (Hash[Symbol | String, untyped] attrs) -> untyped
 
     def chat: -> Resources::Chat
     def responses: -> Resources::Responses

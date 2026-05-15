@@ -7,6 +7,32 @@ RSpec.describe SavvyOpenrouter::Connection do
   let(:conn) { described_class.new(config) }
 
   describe "#post" do
+    it "raises PaymentRequiredError on 402 JSON body" do
+      stub_request(:post, "https://openrouter.ai/api/v1/chat/completions")
+        .to_return(
+          status: 402,
+          headers: { "Content-Type" => "application/json" },
+          body: { error: { message: "Insufficient credits" } }.to_json
+        )
+
+      expect do
+        conn.post("/chat/completions", body: { model: "x", messages: [] })
+      end.to raise_error(SavvyOpenrouter::PaymentRequiredError, /Insufficient credits/)
+    end
+
+    it "raises ApiError on 503 JSON body" do
+      stub_request(:post, "https://openrouter.ai/api/v1/chat/completions")
+        .to_return(
+          status: 503,
+          headers: { "Content-Type" => "application/json" },
+          body: { error: { message: "Service unavailable" } }.to_json
+        )
+
+      expect do
+        conn.post("/chat/completions", body: { model: "x", messages: [] })
+      end.to raise_error(SavvyOpenrouter::ApiError, /Service unavailable/)
+    end
+
     it "raises AuthenticationError on 401 JSON body" do
       stub_request(:post, "https://openrouter.ai/api/v1/chat/completions")
         .to_return(
@@ -43,6 +69,7 @@ RSpec.describe SavvyOpenrouter::Connection do
               "duration_ms" => "ms",
               "request_body" => "req",
               "response_body" => "resp",
+              "error_message" => "err",
               "streaming" => "sse"
             }
           }
@@ -71,6 +98,34 @@ RSpec.describe SavvyOpenrouter::Connection do
         expect(row["sse"]).to be false
         expect(row["req"]).to include("model")
         expect(row["resp"]).to include("error")
+        expect(row["err"]).to eq("bad")
+      end
+
+      it "records generation_id from x-generation-id when column mapped" do
+        config = SavvyOpenrouter::Configuration.new(
+          api_key: "sk-test",
+          api_call_log: {
+            model: "SavvyOpenrouter::SpecApiCallLogRow",
+            columns: {
+              "method" => "verb",
+              "status" => "code",
+              "generation_id" => "gid",
+              "response_body" => "resp"
+            }
+          }
+        )
+        log_conn = described_class.new(config)
+
+        stub_request(:post, "https://openrouter.ai/api/v1/chat/completions")
+          .to_return(
+            status: 200,
+            headers: { "Content-Type" => "application/json", "x-generation-id" => "gen-from-header" },
+            body: { id: "gen-from-body", choices: [] }.to_json
+          )
+
+        log_conn.post("/chat/completions", body: { model: "x", messages: [] })
+        expect(log_storage.size).to eq(1)
+        expect(log_storage.first["gid"]).to eq("gen-from-header")
       end
     end
   end
