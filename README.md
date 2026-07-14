@@ -214,14 +214,14 @@ OpenRouter documents the legacy `plugins: [{ id: "web" }]` approach as deprecate
 client.models.list(category: "programming", output_modalities: "text")
 ```
 
-OpenRouter returns models in **curated rank order** within each filtered result set—that order is not “highest `context_length` wins.” To approximate the **top free text model** for a category, call **`first_ranked_free_text_model`**, which keeps API order and returns the **first** model whose **`pricing.prompt`** and **`pricing.completion`** both parse to zero:
+OpenRouter returns models in **curated rank order** within each filtered result set—that order is not “highest `context_length` wins.” To approximate the **top free text model** for a category, call **`first_ranked_free_text_model`**, which calls **`GET /models`** with **`max_price=0`** (and text modality), keeps API order, and returns the **first** model whose **`pricing.prompt`** and **`pricing.completion`** both parse to zero. Temporary free models (those with an **`expiration_date` / “going away” badge) are **included** on purpose when they rank first:
 
 ```ruby
 client.models.first_ranked_free_text_model(category: "programming")
 client.models.first_ranked_free_text_model(category: "roleplay")
 ```
 
-**Use a stored model id for normal traffic.** Resolving the free model calls **`GET /models`** (one request). Each chat turn is **`POST /chat/completions`** (another). If you call `first_ranked_free_text_model` (or `list` and pick) on **every** user message, you pay **two** API calls per turn—list plus chat. Instead, resolve **once** (at deploy, in a Rake task, or on a long TTL), **remember** the returned **`id`** (environment variable, database, cache, or `default_model` in `savvy_openrouter.yml`), and pass that string to **`client.chat.completions(model: ...)`** for ongoing requests. Refresh the stored id when you want to pick up a new “top free” model after OpenRouter changes their list.
+**Use a stored model id for normal traffic.** Resolving the free model calls **`GET /models`** (one request). Each chat turn is **`POST /chat/completions`** (another). If you call `first_ranked_free_text_model` (or `list` and pick) on **every** user message, you pay **two** API calls per turn—list plus chat. Instead, resolve **once** (at deploy, in a Rake task, or on a long TTL), **remember** the returned **`id`** (environment variable, database, cache, or `default_model` in `savvy_openrouter.yml`), and pass that string to **`client.chat.completions(model: ...)`** for ongoing requests. Refresh the stored id when you want to pick up a new “top free” model after OpenRouter changes their list—especially if the chosen model lists an expiration date.
 
 That heuristic stays aligned with OpenRouter’s listing **as long as their ranking and pricing rows stay as they are**; it is not a separate benchmark score from the JSON (there is no `rating` field on each model). For chat-specific knobs such as **`tools`**, **`tool_choice`**, and **`response_format`** (including JSON schema), pass them on **`client.chat.completions`**; global YAML **`defaults`** also merge into embeddings and other resources, so prefer per-call args for tool and schema defaults unless you only use chat endpoints.
 
@@ -282,7 +282,7 @@ bin/setup
 bundle exec rake   # RSpec + RuboCop
 ```
 
-Integration tests live in `spec/integration/` and are tagged `:integration`. When `OPENROUTER_API_KEY` is set, they call the live API (WebMock allows net connect only for those examples). Smoke chat examples use the free model `inclusionai/ring-2.6-1t:free`; **`spec/integration/free_model_rank_spec.rb`** asserts curated “first free” model ids for `programming` and `roleplay` against the live models list (these examples can fail if OpenRouter changes ordering or pricing).
+Integration tests live in `spec/integration/` and are tagged `:integration`. When `OPENROUTER_API_KEY` is set, they call the live API (WebMock allows net connect only for those examples). Smoke chat examples use the free model `nvidia/nemotron-3-super-120b-a12b:free`; **`spec/integration/free_model_rank_spec.rb`** asserts curated “first free” model ids for `programming` and `roleplay` against the live models list (these examples can fail if OpenRouter changes ordering or pricing).
 
 ## Contributing
 

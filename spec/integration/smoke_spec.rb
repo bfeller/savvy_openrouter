@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-FREE_INTEGRATION_MODEL = "inclusionai/ring-2.6-1t:free"
+FREE_INTEGRATION_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 
 # Set OPENROUTER_API_KEY to run (e.g. export OPENROUTER_API_KEY=$(cat temp_openrouter_key.txt))
 RSpec.describe "OpenRouter integration smoke", :integration do

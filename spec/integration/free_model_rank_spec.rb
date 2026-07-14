@@ -2,8 +2,8 @@
 
 require "spec_helper"
 
-# Live API: OpenRouter returns models in ranked order per category; "first free with zero pricing"
-# matches curated top free picks when using output_modalities=text (verified 2026-05-09).
+# Live API: OpenRouter returns free models in ranked order per category when max_price=0;
+# first_ranked_free_text_model returns that first free text model (verified 2026-07-14).
 RSpec.describe "OpenRouter free model ranking", :integration do
   before do
     skip "set OPENROUTER_API_KEY to run integration tests" unless ENV["OPENROUTER_API_KEY"]
@@ -14,10 +14,14 @@ RSpec.describe "OpenRouter free model ranking", :integration do
 
     prog = client.models.first_ranked_free_text_model(category: "programming")
     expect(prog).to be_a(Hash)
-    expect(prog[:id]).to eq("nvidia/nemotron-3-super-120b-a12b:free")
+    expect(prog[:id]).to eq("tencent/hy3:free")
+    expect(prog.dig(:pricing, :prompt).to_s.to_f).to eq(0)
+    expect(prog.dig(:pricing, :completion).to_s.to_f).to eq(0)
 
     rp = client.models.first_ranked_free_text_model(category: "roleplay")
     expect(rp).to be_a(Hash)
-    expect(rp[:id]).to eq("openrouter/owl-alpha")
+    expect(rp[:id]).to eq("tencent/hy3:free")
+    expect(rp.dig(:pricing, :prompt).to_s.to_f).to eq(0)
+    expect(rp.dig(:pricing, :completion).to_s.to_f).to eq(0)
   end
 end

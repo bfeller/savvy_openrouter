@@ -21,16 +21,19 @@ RSpec.describe SavvyOpenrouter::Resources::Models do
   end
 
   describe "#first_ranked_free_text_model" do
-    it "returns the first zero-priced model in API order" do
+    it "requests free models and returns the first zero-priced model in API order" do
       body = {
         data: [
-          { id: "paid/model", pricing: { prompt: "1", completion: "1" } },
-          { id: "nvidia/nemotron-3-super-120b-a12b:free", pricing: { prompt: "0", completion: "0" } },
+          { id: "tencent/hy3:free", pricing: { prompt: "0", completion: "0" }, expiration_date: "2026-07-21" },
           { id: "other/free:free", pricing: { prompt: "0", completion: "0" } }
         ]
       }
       stub_request(:get, "https://openrouter.ai/api/v1/models")
-        .with(query: hash_including("category" => "programming"))
+        .with(query: hash_including(
+          "category" => "programming",
+          "output_modalities" => "text",
+          "max_price" => "0"
+        ))
         .to_return(
           status: 200,
           headers: { "Content-Type" => "application/json" },
@@ -38,7 +41,7 @@ RSpec.describe SavvyOpenrouter::Resources::Models do
         )
 
       m = client.models.first_ranked_free_text_model(category: "programming")
-      expect(m[:id]).to eq("nvidia/nemotron-3-super-120b-a12b:free")
+      expect(m[:id]).to eq("tencent/hy3:free")
     end
   end
 end

@@ -13,11 +13,13 @@ module SavvyOpenrouter
         end
       end
 
-      # Uses GET /models with filters, then returns the first model whose prompt + completion pricing are zero.
-      # OpenRouter returns models in curated rank order within a category; first matching free model aligns with
-      # site “top free” picks when combined with output_modalities=text.
+      # Uses GET /models with category + free-price filters, then returns the first model whose prompt and
+      # completion pricing are both zero. OpenRouter returns models in curated rank order; the first free
+      # match aligns with site “top free” picks when combined with output_modalities=text.
+      # Models scheduled for removal (expiration_date) are still eligible — callers often want the current
+      # top free pick even when it is temporary.
       def first_ranked_free_text_model(category:, output_modalities: "text")
-        res = list(category: category, output_modalities: output_modalities)
+        res = list(category: category, output_modalities: output_modalities, max_price: 0)
         data = res[:data] || []
         data.find { |m| free_pricing?(m) }
       end
