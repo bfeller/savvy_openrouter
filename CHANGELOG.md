@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.4.2] - 2026-07-14
+
 ### Changed
 
 - **`Models#first_ranked_free_text_model`:** passes **`max_price: 0`** to **`GET /models`** (OpenRouter’s free-price filter) while still requiring zero prompt and completion pricing. Temporary free models with an **`expiration_date`** remain eligible when they rank first. Integration expectations updated for current top free ids; smoke chat model switched off the removed `inclusionai/ring-2.6-1t:free` id.
